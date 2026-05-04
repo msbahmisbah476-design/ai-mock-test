@@ -1,5 +1,39 @@
 import streamlit as st
+def set_bg():
+    st.markdown(
+        f"""
+        <style>
+        /* Main background gradient */
+        .stApp {{
+            background: linear-gradient(to right, #0f2027, #203a43, #2b535e);
+            color: #ffffff;
+        }}
+        
+        /* Sidebar styling */
+        [data-testid="stSidebar"] {{
+            background-color: #1a1a1a !important;
+            border-right: 2px solid #FFD700;
+        }}
 
+        /* Gold Button styling */
+        .stButton>button {{
+            background-color: #FFD700;
+            color: black;
+            border-radius: 10px;
+            font-weight: bold;
+            border: none;
+        }}
+        
+        /* Ensure text is visible on dark background */
+        h1, h2, h3, p, label {{
+            color: white !important;
+        }}
+        </style>
+        """,
+        unsafe_allow_html=True  # Corrected parameter name
+    )
+
+set_bg()
 # --- COMPLETE RESOURCE DATABASE ---
 RECOMMENDATIONS = {
     "BCA (Computer Applications)": {

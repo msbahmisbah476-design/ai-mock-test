@@ -2,7 +2,41 @@ import streamlit as st
 import os
 from supabase import create_client
 from dotenv import load_dotenv
+def set_bg():
+    st.markdown(
+        f"""
+        <style>
+        /* Main background gradient */
+        .stApp {{
+            background: linear-gradient(to right, #0f2027, #203a43, #2b535e);
+            color: #ffffff;
+        }}
+        
+        /* Sidebar styling */
+        [data-testid="stSidebar"] {{
+            background-color: #1a1a1a !important;
+            border-right: 2px solid #FFD700;
+        }}
 
+        /* Gold Button styling */
+        .stButton>button {{
+            background-color: #FFD700;
+            color: black;
+            border-radius: 10px;
+            font-weight: bold;
+            border: none;
+        }}
+        
+        /* Ensure text is visible on dark background */
+        h1, h2, h3, p, label {{
+            color: white !important;
+        }}
+        </style>
+        """,
+        unsafe_allow_html=True  # Corrected parameter name
+    )
+
+set_bg()
 load_dotenv()
 url = "https://jzvlgaobidpmxiyumfoa.supabase.co"
 key ="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp6dmxnYW9iaWRwbXhpeXVtZm9hIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUxMjM0NDQsImV4cCI6MjA5MDY5OTQ0NH0.syIydrW4a5dnGUh3nB-Igp0WI3XlCOSYLvjcXC5zqos"
