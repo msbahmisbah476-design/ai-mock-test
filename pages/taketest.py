@@ -4,7 +4,6 @@ import random
 import time
 import pandas as pd
 from supabase import create_client
-import streamlit.components.v1 as components
 
 # --- PAGE CONFIG & STYLES ---
 def set_bg():
@@ -15,7 +14,6 @@ def set_bg():
         [data-testid="stSidebar"] { background-color: #1a1a1a !important; border-right: 2px solid #FFD700; }
         .stButton>button { background-color: #FFD700; color: black; border-radius: 10px; font-weight: bold; border: none; }
         h1, h2, h3, p, label { color: white !important; }
-        /* Style for correct/incorrect answers */
         .correct-box { padding: 15px; background-color: rgba(0, 255, 0, 0.15); border-left: 5px solid #00ff00; border-radius: 5px; margin-top: 10px; }
         .wrong-box { padding: 15px; background-color: rgba(255, 0, 0, 0.15); border-left: 5px solid #ff0000; border-radius: 5px; margin-top: 10px; }
         </style>
@@ -80,19 +78,18 @@ with st.sidebar:
     sub_dict = UNIVERSITY_SYLLABUS[course][level]
     selected_sub = st.selectbox("Select Subject", list(sub_dict.keys()))
     st.divider()
-    voice_cmd = st.text_input("🎙️ Voice Simulation", placeholder="Type 'Start' or 'Submit'")
+    voice_cmd = st.text_input("🎙️ Voice Simulation", placeholder="Type 'Start' or 'Submit'").lower()
 
 # 2. START TEST LOGIC
-if st.button("🚀 Start Mock Test") or voice_cmd.lower() == "start":
+if st.button("🚀 Start Mock Test") or voice_cmd == "start":
     st.session_state.start_time = time.time()
     st.session_state.current_course = f"{course} ({level})"
-    st.session_state.submitted = False # Reset the submission state
+    st.session_state.submitted = False 
     
     res = requests.get(f"https://opentdb.com/api.php?amount=10&category={sub_dict[selected_sub]}&type=multiple").json()
     if res['response_code'] == 0:
         st.session_state.quiz_data = res['results']
         st.session_state.current_sub = selected_sub
-        # CRITICAL: Store randomized options so they don't change on rerun
         st.session_state.shuffled_options = [random.sample(q['incorrect_answers'] + [q['correct_answer']], 4) for q in res['results']]
         st.rerun()
 
@@ -100,32 +97,47 @@ if st.button("🚀 Start Mock Test") or voice_cmd.lower() == "start":
 if 'quiz_data' in st.session_state:
     st.write(f"### 📝 Testing: {st.session_state.current_sub}")
     
-    user_ans = {}
+    user_selections = {}
     is_submitted = st.session_state.get('submitted', False)
 
     for i, q in enumerate(st.session_state.quiz_data):
         st.write(f"---")
         st.write(f"**Q{i+1}: {q['question']}**")
         
-        # Display the question with options
-        user_ans[i] = st.radio(
+        user_selections[i] = st.radio(
             f"Select option for Q{i+1}", 
             st.session_state.shuffled_options[i], 
-            key=f"q{i}", 
-            disabled=is_submitted # Lock choices after submission
+            key=f"user_q{i}", 
+            disabled=is_submitted
         )
 
-        # --- FEATURE: REVEAL ANSWERS ---
         if is_submitted:
-            if user_ans[i] == q['correct_answer']:
+            if user_selections[i] == q['correct_answer']:
                 st.markdown(f'<div class="correct-box">✅ **Correct!** The answer is <b>{q["correct_answer"]}</b></div>', unsafe_allow_html=True)
             else:
-                st.markdown(f'<div class="wrong-box">❌ **Incorrect.** You selected {user_ans[i]}. The correct answer is <b>{q["correct_answer"]}</b></div>', unsafe_allow_html=True)
+                st.markdown(f'<div class="wrong-box">❌ **Incorrect.** You selected {user_selections[i]}. The correct answer is <b>{q["correct_answer"]}</b></div>', unsafe_allow_html=True)
 
     # 4. SUBMISSION LOGIC
     if not is_submitted:
-        if st.button("📝 Submit Results") or voice_cmd.lower() == "submit":
-            correct_count = sum(1 for i, q in enumerate(st.session_state.quiz_data) if user_ans[i] == q['correct_answer'])
+        if st.button("📝 Submit Results") or voice_cmd == "submit":
+            correct_count = 0
+            wrong_questions_to_save = []
+
+            for i, q in enumerate(st.session_state.quiz_data):
+                selected = user_selections[i]
+                correct = q['correct_answer']
+                
+                if selected == correct:
+                    correct_count += 1
+                else:
+                    wrong_questions_to_save.append({
+                        "email": st.session_state.user_email,
+                        "subject": st.session_state.current_sub,
+                        "question": q['question'],
+                        "user_ans": selected,
+                        "correct_ans": correct
+                    })
+
             score = int((correct_count / len(st.session_state.quiz_data)) * 100)
             duration = round((time.time() - st.session_state.start_time) / 60, 2)
 
@@ -138,14 +150,21 @@ if 'quiz_data' in st.session_state:
             }
             
             try:
+                # Save to student_logs
                 supabase.table("student_logs").insert(log_data).execute()
-                st.session_state.submitted = True # Set state to submitted
-                st.success(f"Final Score: {score}%. Check the Review below!")
-                st.rerun() # Refresh to trigger the Review Mode (is_submitted = True)
+                
+                # Save mistakes to wrong_answers
+                if wrong_questions_to_save:
+                    supabase.table("wrong_answers").insert(wrong_questions_to_save).execute()
+                
+                st.session_state.submitted = True 
+                st.success(f"Final Score: {score}%. Check the Review Room for insights!")
+                st.rerun() 
             except Exception as e:
                 st.error(f"Database Error: {e}")
     else:
-        if st.button("🔄 Take Another Test"):
+        st.info("💡 Scroll up to review your answers. Use the Sidebar to start a new test.")
+        if st.button("🔄 Clear and New Test"):
             del st.session_state.quiz_data
             st.session_state.submitted = False
             st.rerun()
