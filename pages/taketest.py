@@ -4,47 +4,37 @@ import random
 import time
 import pandas as pd
 from supabase import create_client
+import streamlit.components.v1 as components
+
+# --- PAGE CONFIG & STYLES ---
 def set_bg():
     st.markdown(
-        f"""
+        """
         <style>
-        /* Main background gradient */
-        .stApp {{
-            background: linear-gradient(to right, #0f2027, #203a43, #2b535e);
-            color: #ffffff;
-        }}
-        
-        /* Sidebar styling */
-        [data-testid="stSidebar"] {{
-            background-color: #1a1a1a !important;
-            border-right: 2px solid #FFD700;
-        }}
-
-        /* Gold Button styling */
-        .stButton>button {{
-            background-color: #FFD700;
-            color: black;
-            border-radius: 10px;
-            font-weight: bold;
-            border: none;
-        }}
-        
-        /* Ensure text is visible on dark background */
-        h1, h2, h3, p, label {{
-            color: white !important;
-        }}
+        .stApp { background: linear-gradient(to right, #0f2027, #203a43, #2b535e); color: #ffffff; }
+        [data-testid="stSidebar"] { background-color: #1a1a1a !important; border-right: 2px solid #FFD700; }
+        .stButton>button { background-color: #FFD700; color: black; border-radius: 10px; font-weight: bold; border: none; }
+        h1, h2, h3, p, label { color: white !important; }
+        /* Style for correct/incorrect answers */
+        .correct-box { padding: 15px; background-color: rgba(0, 255, 0, 0.15); border-left: 5px solid #00ff00; border-radius: 5px; margin-top: 10px; }
+        .wrong-box { padding: 15px; background-color: rgba(255, 0, 0, 0.15); border-left: 5px solid #ff0000; border-radius: 5px; margin-top: 10px; }
         </style>
         """,
-        unsafe_allow_html=True  # Corrected parameter name
+        unsafe_allow_html=True
     )
 
 set_bg()
+
+# --- SECURITY GUARD ---
+if "user_email" not in st.session_state or not st.session_state.user_email:
+    st.warning("⚠️ Please login from the main page first.")
+    st.stop()
+
 # --- DATABASE CONNECTION ---
 url = "https://jzvlgaobidpmxiyumfoa.supabase.co"
-key = "sb_publishable_GmTw6TuUqdBmLzITq-HqyQ_jkbZceVT" 
+key = "sb_publishable_GmTw6TuUqdBmLzITq-HqyQ_jkbZceVT"
 supabase = create_client(url, key)
 
-# --- THE MEGA SYLLABUS ---
 UNIVERSITY_SYLLABUS = {
     "BCA (Computer Applications)": {
         "1st Sem": {"C Programming": 18, "Digital Electronics": 18, "Discrete Maths": 19},
@@ -83,84 +73,79 @@ UNIVERSITY_SYLLABUS = {
 st.title("🏛️ AI Mock Test Portal")
 
 # 1. SELECTION UI
-course = st.selectbox("Select Stream", list(UNIVERSITY_SYLLABUS.keys()))
-level = st.selectbox("Select Semester/Year", list(UNIVERSITY_SYLLABUS[course].keys()))
-sub_dict = UNIVERSITY_SYLLABUS[course][level]
-selected_sub = st.selectbox("Select Subject", list(sub_dict.keys()))
+with st.sidebar:
+    st.header("⚙️ Test Setup")
+    course = st.selectbox("Select Stream", list(UNIVERSITY_SYLLABUS.keys()))
+    level = st.selectbox("Select Semester/Year", list(UNIVERSITY_SYLLABUS[course].keys()))
+    sub_dict = UNIVERSITY_SYLLABUS[course][level]
+    selected_sub = st.selectbox("Select Subject", list(sub_dict.keys()))
+    st.divider()
+    voice_cmd = st.text_input("🎙️ Voice Simulation", placeholder="Type 'Start' or 'Submit'")
 
 # 2. START TEST LOGIC
-if st.button("🚀 Start Mock Test"):
-    # Reset and Start Clock
+if st.button("🚀 Start Mock Test") or voice_cmd.lower() == "start":
     st.session_state.start_time = time.time()
     st.session_state.current_course = f"{course} ({level})"
+    st.session_state.submitted = False # Reset the submission state
     
-    # Fetch 10 questions
     res = requests.get(f"https://opentdb.com/api.php?amount=10&category={sub_dict[selected_sub]}&type=multiple").json()
     if res['response_code'] == 0:
         st.session_state.quiz_data = res['results']
         st.session_state.current_sub = selected_sub
+        # CRITICAL: Store randomized options so they don't change on rerun
+        st.session_state.shuffled_options = [random.sample(q['incorrect_answers'] + [q['correct_answer']], 4) for q in res['results']]
         st.rerun()
 
-# 3. QUIZ INTERFACE WITH TIMER
+# 3. QUIZ INTERFACE
 if 'quiz_data' in st.session_state:
-    
-    # --- TIMER LOGIC START ---
-    time_limit = 10 * 60 # 10 Minutes
-    elapsed = time.time() - st.session_state.get('start_time', time.time())
-    remaining = time_limit - elapsed
-
-    with st.sidebar:
-        st.markdown("## ⏳ Time Remaining")
-        if remaining > 0:
-            mins, secs = divmod(int(remaining), 60)
-            st.subheader(f"⏱️ {mins:02d}:{secs:02d}")
-            if remaining < 60:
-                st.warning("⚠️ Hurry up! One minute left!")
-        else:
-            st.error("⏰ TIME EXPIRED!")
-            st.write("Please click submit to save your progress.")
-    # --- TIMER LOGIC END ---
-
     st.write(f"### 📝 Testing: {st.session_state.current_sub}")
     
     user_ans = {}
+    is_submitted = st.session_state.get('submitted', False)
+
     for i, q in enumerate(st.session_state.quiz_data):
+        st.write(f"---")
         st.write(f"**Q{i+1}: {q['question']}**")
-        opts = random.sample(q['incorrect_answers'] + [q['correct_answer']], 4)
-        user_ans[i] = st.radio(f"Select option for Q{i+1}", opts, key=f"q{i}")
+        
+        # Display the question with options
+        user_ans[i] = st.radio(
+            f"Select option for Q{i+1}", 
+            st.session_state.shuffled_options[i], 
+            key=f"q{i}", 
+            disabled=is_submitted # Lock choices after submission
+        )
 
-    if st.button("📝 Submit Results"):
-        # Calculate Stats
-        correct = sum(1 for i, q in enumerate(st.session_state.quiz_data) if user_ans[i] == q['correct_answer'])
-        score = int((correct / len(st.session_state.quiz_data)) * 100)
-        duration = round((time.time() - st.session_state.start_time) / 60, 2)
+        # --- FEATURE: REVEAL ANSWERS ---
+        if is_submitted:
+            if user_ans[i] == q['correct_answer']:
+                st.markdown(f'<div class="correct-box">✅ **Correct!** The answer is <b>{q["correct_answer"]}</b></div>', unsafe_allow_html=True)
+            else:
+                st.markdown(f'<div class="wrong-box">❌ **Incorrect.** You selected {user_ans[i]}. The correct answer is <b>{q["correct_answer"]}</b></div>', unsafe_allow_html=True)
 
-        # --- NEW EMOJI & ANIMATION LOGIC ---
-        if score >= 80:
-            st.balloons() # This triggers the balloon animation
-            st.success(f"🥳 **Amazing Work!** You got {correct} out of 10 correct! ({score}%)")
-            st.markdown("### 😍 Keep it up, you're a genius!")
-        
-        elif score >= 50:
-            st.info(f"🙂 **Good Effort!** You got {correct} out of 10 correct! ({score}%)")
-            st.markdown("### ✨ You're doing well! Just a little more practice.")
-        
-        else:
-            st.error(f"😟 **Don't be sad!** You got {correct} out of 10 correct. ({score}%)")
-            st.markdown("### 📚 Try again! Every mistake makes you smarter.")
-        
-        # --- SAVE TO SUPABASE (Keep your existing code) ---
-        log_data = {
-            "email": st.session_state.user_email,
-            "course": st.session_state.current_course,
-            "subject": st.session_state.current_sub,
-            "score": score,
-            "time_spent_mins": duration,
-            "created_at": pd.Timestamp.now(tz='UTC').isoformat()
-        }
-        
-        try:
-            supabase.table("STUDENT_LOGS").insert(log_data).execute()
-            del st.session_state.quiz_data # Clear test after showing result
-        except Exception as e:
-            st.error(f"Save Error: {e}")
+    # 4. SUBMISSION LOGIC
+    if not is_submitted:
+        if st.button("📝 Submit Results") or voice_cmd.lower() == "submit":
+            correct_count = sum(1 for i, q in enumerate(st.session_state.quiz_data) if user_ans[i] == q['correct_answer'])
+            score = int((correct_count / len(st.session_state.quiz_data)) * 100)
+            duration = round((time.time() - st.session_state.start_time) / 60, 2)
+
+            log_data = {
+                "email": st.session_state.user_email,
+                "course": st.session_state.current_course,
+                "subject": st.session_state.current_sub,
+                "score": score,
+                "time_spent_mins": duration
+            }
+            
+            try:
+                supabase.table("student_logs").insert(log_data).execute()
+                st.session_state.submitted = True # Set state to submitted
+                st.success(f"Final Score: {score}%. Check the Review below!")
+                st.rerun() # Refresh to trigger the Review Mode (is_submitted = True)
+            except Exception as e:
+                st.error(f"Database Error: {e}")
+    else:
+        if st.button("🔄 Take Another Test"):
+            del st.session_state.quiz_data
+            st.session_state.submitted = False
+            st.rerun()
