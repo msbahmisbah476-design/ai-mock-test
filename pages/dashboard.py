@@ -164,7 +164,7 @@ if res.data:
         
         st.write("---")
         st.subheader("📜 Official Documents")
-        pdf_bytes = generate_pdf_marks_card(st.session_state.user_name, df)
+        pdf_bytes = bytes(generate_pdf_marks_card(st.session_state.user_name, df))
         st.download_button(label="📥 Download Result (PDF)", 
                            data=pdf_bytes, 
                            file_name=f"{st.session_state.user_name}_Report.pdf",

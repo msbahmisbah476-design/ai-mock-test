@@ -32,7 +32,7 @@ def generate_pdf_marks_card(name, df):
         
     # 5. Output as a String Buffer
     # The 'latin-1' encoding is required for FPDF to output bytes correctly
-    return pdf.output(dest='S').encode('latin-1')
+    return bytes(pdf.output())
 
 # 2. AI SUCCESS PREDICTION (Linear Regression)
 def run_predictive_analysis(df):
